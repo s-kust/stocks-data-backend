@@ -31,16 +31,41 @@ Resources:
   # Each Lambda function is defined by properties:
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
 
-  # This is a Lambda function config associated with the source code: hello-from-lambda.js
-  helloFromLambdaFunction:
+  # helloFromLambdaFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: ./
+  #     Handler: src/handlers/hello-from-lambda.helloFromLambdaHandler
+  #     Runtime: nodejs14.x
+  #     MemorySize: 128
+  #     Timeout: 60
+  #     Description: A Lambda function that returns a static string.
+  #     Policies:
+  #       - AWSLambdaBasicExecutionRole
+
+  0-create-tickers-df-from-spreadsheet:
     Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: ./
-      Handler: src/handlers/hello-from-lambda.helloFromLambdaHandler
-      Runtime: nodejs14.x
-      MemorySize: 128
-      Timeout: 60
-      Description: A Lambda function that returns a static string.
+      Properties:
+      CodeUri: ./src/functions/create-tickers-df-from-spreadsheet
+      Handler: app.lambda_handler
+      Layers:
+      - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-gspread:67
+      - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-pandas:43
+      Runtime: python3.8
+      MemorySize: 256
+      Timeout: 13
+      Description: Initial function that creates Pandas DF of rows from portfolio spreadsheet.
       Policies:
-        # Give Lambda basic execution Permission to the helloFromLambda
         - AWSLambdaBasicExecutionRole
+        - SecretsManagerReadWrite
+        - Statement:
+          - Sid: S3ListGetPutDelete
+            Effect: Allow
+            Action:
+            - s3:PutObject
+            - s3:GetObject
+            - s3:DeleteObject
+            - s3:ListBucket
+            Resource:
+            - arn:aws:s3:::kust-pics/*
+            - arn:aws:s3:::kust-pics      
