@@ -25,6 +25,30 @@ Transform: AWS::Serverless-2016-10-31
 #   AppId:
 #     Type: String
 
+Globals:
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,OPTIONS'"
+      AllowHeaders: "'content-type'"
+      AllowOrigin: "'*'"
+      AllowCredentials: "'*'"
+            
+Parameters:
+  apiGatewayName:
+    Type: String
+    Default: StocksBackend
+  apiGatewayStageName:
+    Type: String
+    AllowedPattern: "[a-z0-9]+"
+    Default: call
+  apiGatewayHTTPMethod:
+    Type: String
+    Default: GET
+  # lambdaFunctionName:
+  #   Type: String
+  #   AllowedPattern: "[a-zA-Z0-9]+[a-zA-Z0-9-]+[a-zA-Z0-9]+"
+  #   Default: return-portfolio-rows-json
+
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
 Resources:
@@ -67,6 +91,7 @@ Resources:
       MemorySize: 128
       Timeout: 3
       Description: Return current portfolio rows from current_portfolio_rows.pkl in JSON format.
+      # FunctionName: !Ref lambdaFunctionName
       Policies:
         - AWSLambdaBasicExecutionRole
         - Statement:
@@ -77,4 +102,48 @@ Resources:
               - s3:ListBucket
             Resource:
               - arn:aws:s3:::kust-pics/*
-              - arn:aws:s3:::kust-pics    
+              - arn:aws:s3:::kust-pics   
+
+  apiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Description: Stocks data processing backend API Gateway
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Name: !Ref apiGatewayName
+
+  apiGatewayRootMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: !Ref apiGatewayHTTPMethod
+      Integration:
+        IntegrationHttpMethod: GET
+        # Type: AWS_PROXY
+        Type: AWS
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations
+          - lambdaArn: !GetAtt ReturnPortfolioRows.Arn
+      ResourceId: !GetAtt apiGateway.RootResourceId
+      RestApiId: !Ref apiGateway
+
+  apiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - apiGatewayRootMethod
+    Properties:
+      RestApiId: !Ref apiGateway
+      StageName: !Ref apiGatewayStageName 
+
+  lambdaApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ReturnPortfolioRows.Arn
+      Principal: apigateway.amazonaws.com    
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${apiGateway}/*/${apiGatewayHTTPMethod}/
+
+Outputs:
+  apiGatewayInvokeURL:
+    Value: !Sub https://${apiGateway}.execute-api.${AWS::Region}.amazonaws.com/${apiGatewayStageName}
