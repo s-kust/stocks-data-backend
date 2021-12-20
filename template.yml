@@ -45,27 +45,27 @@ Resources:
 
   0-create-tickers-df-from-spreadsheet:
     Type: AWS::Serverless::Function
-      Properties:
-        CodeUri: ./src/functions/create-tickers-df-from-spreadsheet
-        Handler: app.lambda_handler
-        Layers:
+    Properties:
+      CodeUri: ./src/functions/create-tickers-df-from-spreadsheet
+      Handler: app.lambda_handler
+      Layers:
         - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-gspread:67
         - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-pandas:43
-        Runtime: python3.8
-        MemorySize: 256
-        Timeout: 13
-        Description: Initial function that creates Pandas DF of rows from portfolio spreadsheet.
-        Policies:
-          - AWSLambdaBasicExecutionRole
-          - SecretsManagerReadWrite
-          - Statement:
-            - Sid: S3ListGetPutDelete
-              Effect: Allow
-              Action:
+      Runtime: python3.8
+      MemorySize: 256
+      Timeout: 13
+      Description: Initial function that creates Pandas DF of rows from portfolio spreadsheet.
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - SecretsManagerReadWrite
+        - Statement:
+          - Sid: S3ListGetPutDelete
+            Effect: Allow
+            Action:
               - s3:PutObject
               - s3:GetObject
               - s3:DeleteObject
               - s3:ListBucket
-              Resource:
+            Resource:
               - arn:aws:s3:::kust-pics/*
               - arn:aws:s3:::kust-pics      
