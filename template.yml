@@ -31,18 +31,6 @@ Resources:
   # Each Lambda function is defined by properties:
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
 
-  # helloFromLambdaFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     CodeUri: ./
-  #     Handler: src/handlers/hello-from-lambda.helloFromLambdaHandler
-  #     Runtime: nodejs14.x
-  #     MemorySize: 128
-  #     Timeout: 60
-  #     Description: A Lambda function that returns a static string.
-  #     Policies:
-  #       - AWSLambdaBasicExecutionRole
-
   CreateTickersFromSpreadsheet:
     Type: AWS::Serverless::Function
     Properties:
@@ -69,3 +57,24 @@ Resources:
             Resource:
               - arn:aws:s3:::kust-pics/*
               - arn:aws:s3:::kust-pics      
+
+  ReturnPortfolioRows:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./src/functions/return-portfolio-rows-json
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      MemorySize: 128
+      Timeout: 3
+      Description: Return current portfolio rows from current_portfolio_rows.pkl in JSON format.
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+          - Sid: S3ListGetPutDeleteRPR
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - arn:aws:s3:::kust-pics/*
+              - arn:aws:s3:::kust-pics    
