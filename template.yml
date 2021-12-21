@@ -114,7 +114,55 @@ Resources:
               - s3:ListBucket
             Resource:
               - arn:aws:s3:::charts-public/*
-              - arn:aws:s3:::charts-public                    
+              - arn:aws:s3:::charts-public      
+
+  SendEmailWithPics:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./src/functions/send_email_with_pics
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      MemorySize: 128
+      Timeout: 6
+      Description: Send email with portfolio row charts created previously.
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:  
+          - Sid: S3SourceGet
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - arn:aws:s3:::charts-public/*
+              - arn:aws:s3:::charts-public                 
+          - Sid: SendEmail
+            Effect: Allow
+            Action:
+              - ses:SendEmail
+              - ses:SendRawEmail
+            Resource:
+              - arn:aws:ses:*
+
+  SendEmailProblemsNotification:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./src/functions/send_email_notification_problem
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      MemorySize: 128
+      Timeout: 6
+      Description: Send email with notification if problems occured.
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:                 
+          - Sid: SendEmail
+            Effect: Allow
+            Action:
+              - ses:SendEmail
+              - ses:SendRawEmail
+            Resource:
+              - arn:aws:ses:*
 
   ImportAllRowTickers:
     Type: AWS::Serverless::Function
