@@ -1,29 +1,8 @@
-# This is the SAM template that represents the architecture of your serverless application
-# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-template-basics.html
-
-# The AWSTemplateFormatVersion identifies the capabilities of the template
-# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/format-version-structure.html
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   Stocks data upload and processing backend
 
-# Transform section specifies one or more macros that AWS CloudFormation uses to process your template
-# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
 Transform: AWS::Serverless-2016-10-31
-
-# Shared configuration for all resources, more in
-# https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
-# Globals:
-#   Function:
-    # The PermissionsBoundary allows users to safely develop with their function's permissions constrained
-    # to their current application. All the functions and roles in this application have to include it and
-    # it has to be manually updated when you add resources to your application.
-    # More information in https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_boundaries.html
-    # PermissionsBoundary: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/${AppId}-${AWS::Region}-PermissionsBoundary'
-
-# Parameters:
-#   AppId:
-#     Type: String
 
 Globals:
   Api:
@@ -34,6 +13,27 @@ Globals:
       AllowCredentials: "'*'"
             
 Parameters:
+  RegionId:
+    Type: String
+    Default: us-east-1
+  SecretId:
+    Type: String
+    Default: portfolio_spreadsheet
+  SecretApi:
+    Type: String
+    Default: alpha_vantage_api_key
+  BucketMainData:
+    Type: String
+    Default: kust-pics
+  BucketCharts:
+    Type: String
+    Default: charts-public
+  EmailFrom:
+    Type: String
+    Default: send2kust@gmail.com
+  EmailTo:
+    Type: String
+    Default: send2kust@gmail.com
   apiGatewayName:
     Type: String
     Default: StocksBackend
@@ -44,22 +44,54 @@ Parameters:
   apiGatewayHTTPMethod:
     Type: String
     Default: GET
-  # lambdaFunctionName:
-  #   Type: String
-  #   AllowedPattern: "[a-zA-Z0-9]+[a-zA-Z0-9-]+[a-zA-Z0-9]+"
-  #   Default: return-portfolio-rows-json
 
-# Resources declares the AWS resources that you want to include in the stack
-# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
 Resources:
-  # Each Lambda function is defined by properties:
-  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
 
+  StocksDataStateMachine:
+    Type: AWS::Serverless::StateMachine 
+    Properties:
+      DefinitionUri: s3://kust-pics/state_machine.json
+      DefinitionSubstitutions:
+        CreateTickersFromSpreadsheetArn: !GetAtt  CreateTickersFromSpreadsheet.Arn
+        CreateChartsArn: !GetAtt  CreateCharts.Arn
+        UpdateDjangoDbArn: !GetAtt  UpdateDjangoDb.Arn
+        SendEmailWithPicsArn: !GetAtt  SendEmailWithPics.Arn
+        SendEmailProblemsNotificationArn: !GetAtt  SendEmailProblemsNotification.Arn
+        ImportAllRowTickersArn: !GetAtt  ImportAllRowTickers.Arn
+        UpdateSuccessImportListArn: !GetAtt  UpdateSuccessImportList.Arn
+      Events:
+        DailySchedule:
+          Type: Schedule 
+          Properties:
+            Description: Schedule to run the stocks data processing state machine every business day in the evening.
+            Enabled: True 
+            Schedule: "cron(25 23 ? * MON-FRI *)"
+      Policies: 
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CreateTickersFromSpreadsheet
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CreateCharts
+        - LambdaInvokePolicy:
+            FunctionName: !Ref UpdateDjangoDb
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SendEmailWithPics
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SendEmailProblemsNotification
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ImportAllRowTickers
+        - LambdaInvokePolicy:
+            FunctionName: !Ref UpdateSuccessImportList
+  
   CreateTickersFromSpreadsheet:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./src/functions/create-tickers-df-from-spreadsheet
       Handler: app.lambda_handler
+      Environment:
+        Variables:
+          s3_main_bucket: !Ref BucketMainData
+          region_id: !Ref RegionId
+          secret_id: !Ref SecretId
       Layers:
         - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-gspread:67
         - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-pandas:43
@@ -87,6 +119,10 @@ Resources:
     Properties:
       CodeUri: ./src/functions/create_charts
       Handler: app.lambda_handler
+      Environment:
+        Variables:
+          s3_main_bucket: !Ref BucketMainData
+          s3_bucket_charts: !Ref BucketCharts
       Layers:
         - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-matplotlib:39
         - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-pandas:43
@@ -116,11 +152,43 @@ Resources:
               - arn:aws:s3:::charts-public/*
               - arn:aws:s3:::charts-public      
 
+  UpdateDjangoDb:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./src/functions/update_django_db
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          s3_main_bucket: !Ref BucketMainData
+      Runtime: python3.8
+      MemorySize: 128
+      Timeout: 5
+      Description: Update success imports DB for Django displaying.
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+          - Sid: S3SourceGet
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource:
+              - arn:aws:s3:::kust-pics/*
+              - arn:aws:s3:::kust-pics       
+
   SendEmailWithPics:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./src/functions/send_email_with_pics
       Handler: app.lambda_handler
+      Environment:
+        Variables:
+          region_id: !Ref RegionId
+          s3_bucket_charts: !Ref BucketCharts
+          email_from: !Ref EmailFrom
+          email_to: !Ref EmailTo
       Runtime: python3.8
       MemorySize: 128
       Timeout: 6
@@ -149,6 +217,11 @@ Resources:
     Properties:
       CodeUri: ./src/functions/send_email_notification_problem
       Handler: app.lambda_handler
+      Environment:
+        Variables:
+          region_id: !Ref RegionId
+          email_from: !Ref EmailFrom
+          email_to: !Ref EmailTo
       Runtime: python3.8
       MemorySize: 128
       Timeout: 6
@@ -169,6 +242,11 @@ Resources:
     Properties:
       CodeUri: ./src/functions/import-all-row-tickers
       Handler: app.lambda_handler
+      Environment:
+        Variables:
+          s3_main_bucket: !Ref BucketMainData
+          region_id: !Ref RegionId
+          secret_api: !Ref SecretApi
       Layers:
         - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-pandas:43
       Runtime: python3.8
@@ -195,6 +273,9 @@ Resources:
     Properties:
       CodeUri: ./src/functions/return-portfolio-rows-json
       Handler: app.lambda_handler
+      Environment:
+        Variables:
+          s3_main_bucket: !Ref BucketMainData
       Runtime: python3.8
       MemorySize: 128
       Timeout: 3
@@ -216,6 +297,9 @@ Resources:
     Properties:
       CodeUri: ./src/functions/update_success_imports_list
       Handler: app.lambda_handler
+      Environment:
+        Variables:
+          s3_main_bucket: !Ref BucketMainData
       Runtime: python3.8
       MemorySize: 128
       Timeout: 3

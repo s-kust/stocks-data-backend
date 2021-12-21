@@ -3,12 +3,13 @@ import pandas as pd
 from datetime import datetime as dt, timedelta, timezone
 import pickle
 import boto3
+import os
 
-BUCKET_NAME = 'kust-pics'
+BUCKET_NAME = os.environ.get('s3_main_bucket')		  
 FAILED_IMPORTS_FILE_REMOTE = 'failed_imports.pkl'
 FAILED_IMPORTS_FILE_LOCAL = '/tmp/' + FAILED_IMPORTS_FILE_REMOTE
-SECRET_NAME = "alpha_vantage_api_key"
-REGION_NAME = "us-east-1"
+SECRET_NAME = os.environ.get('secret_api')		  
+REGION_NAME = os.environ.get('region_id')		  
 
 class FileUploadFailureException(Exception): pass
 
@@ -139,11 +140,9 @@ def _process_single_stock_ticker(ticker_code, failed_imports_list):
         import_res = _import_stock_ticker_data(ticker_code, failed_imports_list, ticker_file_name)
         return import_res, ticker_file_name, 1
 
-def lambda_handler(event, context):
-    
-    print('Incoming event:')
-    print(event)
-    
+def lambda_handler(event, context):    
+    # print('Incoming event:')
+    # print(event)    
     failed_imports_file_fresh = _check_fresh_file_in_bucket(FAILED_IMPORTS_FILE_REMOTE)
     if failed_imports_file_fresh:
         try:

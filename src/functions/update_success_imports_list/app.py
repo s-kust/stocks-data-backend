@@ -1,14 +1,16 @@
 import json
 import pickle
 import boto3
+import os
 
-BUCKET_NAME = 'kust-pics'
+BUCKET_NAME = os.environ.get('s3_main_bucket')
 SUCCESS_IMPORTS_FILE_REMOTE = 'success_imports.pkl'
 
 s3 = boto3.client('s3')
 
 def lambda_handler(event, context):
-    
+    # print("Incoming event:")
+    # print(event)
     try:
         s3.download_file(BUCKET_NAME, SUCCESS_IMPORTS_FILE_REMOTE, '/tmp/'+SUCCESS_IMPORTS_FILE_REMOTE)
     except Exception as e:

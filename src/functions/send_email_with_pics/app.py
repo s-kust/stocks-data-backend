@@ -1,5 +1,6 @@
 import json
-import os.path
+# import os.path
+import os
 import boto3
 import email
 from botocore.exceptions import ClientError
@@ -8,13 +9,14 @@ from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.mime.application import MIMEApplication
 
-BUCKET_NAME = "charts-public"
+BUCKET_NAME = os.environ.get('s3_bucket_charts')
 LOCAL_FOLDER = "/tmp/"
-EMAIL_FROM = "send2kust@gmail.com"
-EMAIL_TO = "send2kust@gmail.com"
+EMAIL_FROM = os.environ.get('email_from')
+EMAIL_TO = os.environ.get('email_to')
+REGION_ID = os.environ.get('region_id')
 
 s3 = boto3.client("s3")
-ses_client = boto3.client('ses',region_name="us-east-1")
+ses_client = boto3.client('ses',region_name=REGION_ID)
 
 class DataStore:
     def __init__(self, subject_text, note_text, from_text=EMAIL_FROM, to_text=EMAIL_TO):
@@ -40,7 +42,7 @@ def _add_image_to_msg_root(message_root, image_path, header):
 
 def _create_data_for_email(data_store_object, filename_1, filename_2=None):
     msg_root = MIMEMultipart("related")
-    msg_root["Subject"] = data_store_object.subject
+    msg_root["Subject"] = data_store_object.subject + " V2"
     msg_root["From"] = data_store_object.from_text
     msg_root["To"] = data_store_object.to_text
     msg_root.preamble = "This is a multi-part message in MIME format, with pictures."
@@ -71,6 +73,8 @@ def _create_data_for_email(data_store_object, filename_1, filename_2=None):
     return msg_root
 
 def lambda_handler(event, context):
+    # print("Incoming event:")
+    # print(event)
     try:
         if event['type'] == "Stocks_relative_two":
             subject_str = "Relative " + event['ticker_1'] + "-" + event['ticker_2']

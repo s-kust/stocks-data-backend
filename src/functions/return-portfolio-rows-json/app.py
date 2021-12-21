@@ -1,14 +1,16 @@
 import json
 import pickle
 import boto3
+import os
 
-BUCKET_NAME = 'kust-pics'
+BUCKET_NAME = os.environ.get('s3_main_bucket')
 CURRENT_PORTFOLIO_ROWS_FILE = 'current_portfolio_rows.pkl'
 
 s3 = boto3.client('s3')
 
 def lambda_handler(event, context):
-    
+    # print("Incoming event:")
+    # print(event)
     try:
         s3.download_file(BUCKET_NAME, CURRENT_PORTFOLIO_ROWS_FILE, '/tmp/'+CURRENT_PORTFOLIO_ROWS_FILE)
     except Exception as e:

@@ -4,6 +4,7 @@ from datetime import datetime as dt, timedelta, timezone
 import pandas as pd
 import numpy as np
 import boto3
+import os
 
 class SecretAccessFailedException(Exception): pass
 class NoSecretStringException(Exception): pass
@@ -14,9 +15,9 @@ class WrongRowTypeException(Exception): pass
 class ForexTickerEmptyException(Exception): pass
 class StocksTickerEmptyException(Exception): pass
 
-BUCKET_NAME = 'kust-pics'
-SECRET_NAME = "portfolio_spreadsheet"
-REGION_ID = "us-east-1"
+BUCKET_NAME = os.environ.get('s3_main_bucket')
+SECRET_NAME = os.environ.get('secret_id')
+REGION_ID = os.environ.get('region_id')
 s3 = boto3.client('s3')
 
 def get_secret():
@@ -109,7 +110,8 @@ def check_portfolio_rows_validation_conditions(df_to_check_conditions):
         raise StocksTickerEmptyException("In Stocks_ETFs rows Ticker1 must be not empty.")
 
 def lambda_handler(event, context):
-
+    # print("Incoming event:")
+    # print(event)
     delete_outdated_pickle_files()
     secret = get_secret()        
     data_to_return, portfolio_rows_df = get_list_of_dics_from_spreadsheet(secret)

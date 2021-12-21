@@ -9,8 +9,8 @@ from botocore.exceptions import ClientError
 class DataPickleDownloadException(Exception): pass
 class ChartUploadException(Exception): pass
 
-BUCKET_NAME_SOURCE = 'kust-pics'
-BUCKET_NAME_DEST = 'charts-public'
+BUCKET_NAME_SOURCE = os.environ.get('s3_main_bucket')	
+BUCKET_NAME_DEST = os.environ.get('s3_bucket_charts')	
 LOCAL_FOLDER = '/tmp/'
 FOLDER_IN_BUCKET = 'charts-public/'
 HORIZONTAL_SIZE = 794
@@ -101,6 +101,8 @@ def _download_pickle_data_from_s3(file_name):
     return data
             
 def lambda_handler(event, context):
+    # print("Incoming event:")
+    # print(event)
     data_1 = _download_pickle_data_from_s3(event['file_1'])
     if event['type'] == 'Stocks_relative_two':
         data_2 = _download_pickle_data_from_s3(event['file_2'])

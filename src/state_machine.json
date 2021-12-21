@@ -1,0 +1,217 @@
+{
+  "Comment": "Read tickers rows from Google spreadsheet file and run the processing for each row",
+  "StartAt": "Read Tickers Rows From SpreadSheet",
+  "States": {
+    "Read Tickers Rows From SpreadSheet": {
+      "Type": "Task",
+      "Resource": "${CreateTickersFromSpreadsheetArn}",
+      "OutputPath": "$.body",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "Inject Execution Id"
+        }
+      ],
+      "Next": "Import And Process Data For Each Imported Row"
+    },
+    "Import And Process Data For Each Imported Row": {
+      "Type": "Map",
+      "InputPath": "$",
+      "ItemsPath": "$.data_list_of_dics",
+      "MaxConcurrency": 1,
+      "Iterator": {
+        "StartAt": "Import Row Tickers Data",
+        "States": {
+          "Import Row Tickers Data": {
+            "Type": "Task",
+            "Resource": "${ImportAllRowTickersArn}",
+            "OutputPath": "$.body",
+            "Next": "Import Success Or Failure"
+          },
+          "Import Success Or Failure": {
+            "Type": "Choice",
+            "Choices": [
+              {
+                "Variable": "$.import_success",
+                "BooleanEquals": false,
+                "Next": "Failed Import Processing"
+              },
+              {
+                "Variable": "$.import_success",
+                "BooleanEquals": true,
+                "Next": "Create Charts"
+              }
+            ],
+            "Default": "Failed Import Processing"
+          },
+          "Failed Import Processing": {
+            "Type": "Task",
+            "Resource": "${SendEmailProblemsNotificationArn}",
+            "ResultPath": null,
+            "Next": "How Long Wait Due To External Free API Limits"
+          },
+          "Create Charts": {
+            "Type": "Task",
+            "Resource": "${CreateChartsArn}",
+            "OutputPath": "$.body",
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException"
+                ],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 6,
+                "BackoffRate": 2
+              }
+            ],
+            "Next": "Update Success Imports List"
+          },
+          "Update Success Imports List": {
+            "Type": "Task",
+            "Resource": "${UpdateSuccessImportListArn}",
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException"
+                ],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 6,
+                "BackoffRate": 2
+              }
+            ],
+            "ResultPath": null,
+            "Next": "Send Email WIth Charts"
+          },
+          "Send Email WIth Charts": {
+            "Type": "Task",
+            "Resource": "${SendEmailWithPicsArn}",
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException"
+                ],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 6,
+                "BackoffRate": 2
+              }
+            ],
+            "ResultPath": null,
+            "Next": "How Long Wait Due To External Free API Limits"
+          },
+          "How Long Wait Due To External Free API Limits": {
+            "Type": "Choice",
+            "Choices": [
+              {
+                "Variable": "$.api_call_count",
+                "NumericEquals": 0,
+                "Next": "1 second"
+              },
+              {
+                "Variable": "$.api_call_count",
+                "NumericEquals": 1,
+                "Next": "13 seconds"
+              },
+              {
+                "Variable": "$.api_call_count",
+                "NumericEquals": 2,
+                "Next": "26 seconds"
+              }
+            ],
+            "Default": "26 seconds"
+          },
+          "1 second": {
+            "Type": "Wait",
+            "Seconds": 1,
+            "End": true
+          },
+          "13 seconds": {
+            "Type": "Wait",
+            "Seconds": 13,
+            "End": true
+          },
+          "26 seconds": {
+            "Type": "Wait",
+            "Seconds": 26,
+            "End": true
+          }
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "Inject Execution Id"
+        }
+      ],
+      "Next": "Update Django DB"
+    },
+    "Inject Execution Id": {
+      "Type": "Pass",
+      "Parameters": {
+        "executionId.$": "$$.Execution.Id"
+      },
+      "Next": "Fatal Error Processing"
+    },
+    "Fatal Error Processing": {
+      "Type": "Task",
+      "Resource": "${SendEmailProblemsNotificationArn}",
+      "ResultPath": null,
+      "Next": "Fail After Fatal Error"
+    },
+    "Fail After Fatal Error": {
+      "Type": "Fail",
+      "Cause": "Fatal error occurred, see state machine logs for details",
+      "Error": "Fatal error occurred, see state machine logs for details"
+    },
+    "Update Django DB": {
+      "Type": "Task",
+      "Resource": "${UpdateDjangoDbArn}",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "End": true
+    }
+  }
+}
