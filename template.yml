@@ -82,6 +82,40 @@ Resources:
               - arn:aws:s3:::kust-pics/*
               - arn:aws:s3:::kust-pics      
 
+  CreateCharts:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./src/functions/create_charts
+      Handler: app.lambda_handler
+      Layers:
+        - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-matplotlib:39
+        - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-pandas:43
+        - arn:aws:lambda:us-east-1:342341714633:layer:mplfinance_no_pandas:3
+      Runtime: python3.8
+      MemorySize: 256
+      Timeout: 13
+      Description: Create appropriate charts from pickle data and save them in S3 bucket.
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+          - Sid: S3SourceGet
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - arn:aws:s3:::kust-pics/*
+              - arn:aws:s3:::kust-pics      
+          - Sid: S3DestinationPut
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource:
+              - arn:aws:s3:::charts-public/*
+              - arn:aws:s3:::charts-public                    
+
   ImportAllRowTickers:
     Type: AWS::Serverless::Function
     Properties:
@@ -117,7 +151,6 @@ Resources:
       MemorySize: 128
       Timeout: 3
       Description: Return current portfolio rows from current_portfolio_rows.pkl in JSON format.
-      # FunctionName: !Ref lambdaFunctionName
       Policies:
         - AWSLambdaBasicExecutionRole
         - Statement:
@@ -129,6 +162,29 @@ Resources:
             Resource:
               - arn:aws:s3:::kust-pics/*
               - arn:aws:s3:::kust-pics   
+
+  UpdateSuccessImportList:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./src/functions/update_success_imports_list
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      MemorySize: 128
+      Timeout: 3
+      Description: Update success_imports.pkl file if ticker import was OK.
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+          - Sid: S3ListGetPutDeleteRPR
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource:
+              - arn:aws:s3:::kust-pics/*
+              - arn:aws:s3:::kust-pics  
 
   apiGateway:
     Type: AWS::ApiGateway::RestApi
