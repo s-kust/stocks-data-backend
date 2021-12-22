@@ -61,7 +61,7 @@ def _check_fresh_file_in_bucket(file_key, max_age_minutes=10):
         return False
 
 def _prepare_stock_ticker_import_url(stock_ticker):
-    url_backbone = 'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&outputsize=full&datatype=csv&apikey='
+    url_backbone = 'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&outputsize=full&datatype=csv&apikey='
     symbol_backbone = '&symbol='
     return(url_backbone + alpha_vantage_api_key + symbol_backbone + stock_ticker)
         

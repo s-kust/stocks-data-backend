@@ -4,6 +4,7 @@ from datetime import datetime as dt, timedelta, timezone
 import pandas as pd
 import numpy as np
 import boto3
+from botocore.exceptions import ClientError
 import os
 
 class SecretAccessFailedException(Exception): pass
@@ -68,6 +69,62 @@ def delete_outdated_pickle_files():
     else:
         print('No outdated pickle files found in S3 bucket')
 
+def clear_success_imports_db_table():
+    dynamodb_resource = boto3.resource('dynamodb',region_name=REGION_ID)
+    table_names = [table.name for table in dynamodb_resource.tables.all()]
+    if 'CurrentPortfolioRows' in table_names:
+        print("Table CurrentPortfolioRows found, now drop all items")
+        table = dynamodb_resource.Table('CurrentPortfolioRows')
+        print("Before deletion, number of items in table:")
+        scan = table.scan(ConsistentRead=True)
+        print(scan['Count'])
+        with table.batch_writer() as batch:
+            for each in scan['Items']:
+                batch.delete_item(
+                    Key={
+                        'ticker_combined': each['ticker_combined']
+                    }
+                )
+        print("After deletion, number of items:")
+        scan = table.scan(ConsistentRead=True)
+        print(scan['Count'])
+    else:
+        print("Table CurrentPortfolioRows not found, so now create it")
+        try:
+            table = dynamodb_resource.create_table(
+            TableName='CurrentPortfolioRows',
+            KeySchema=[
+                {
+                    'AttributeName': 'ticker_combined',
+                    'KeyType': 'HASH' 
+                }
+            ],
+            AttributeDefinitions=[
+                {
+                    'AttributeName': 'ticker_combined',
+                    'AttributeType': 'S'
+                }
+            ],
+            ProvisionedThroughput={
+                'ReadCapacityUnits': 10,
+                'WriteCapacityUnits': 10
+                }
+            )
+            table.meta.client.get_waiter('table_exists').wait(TableName='CurrentPortfolioRows', WaiterConfig={'Delay': 1})
+            print("Table created:")
+            print("After creation, number of items:")
+            scan = table.scan(ConsistentRead=True)
+            print(scan['Count'])
+            print()
+        except ClientError as ce:
+            print("ClientError occured")
+            if ce.response['Error']['Code'] == 'ResourceInUseException':
+                print("ResourceInUseException occured")
+            else:
+                print("Unknown exception:")
+                print(ce.response)
+                raise ce
+
 def get_list_of_dics_from_spreadsheet(secret_json):
     try:
         gc = gspread.service_account_from_dict(secret_json)
@@ -113,6 +170,7 @@ def lambda_handler(event, context):
     # print("Incoming event:")
     # print(event)
     delete_outdated_pickle_files()
+    clear_success_imports_db_table()
     secret = get_secret()        
     data_to_return, portfolio_rows_df = get_list_of_dics_from_spreadsheet(secret)
     check_portfolio_rows_validation_conditions(portfolio_rows_df)

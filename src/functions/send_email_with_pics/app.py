@@ -42,7 +42,7 @@ def _add_image_to_msg_root(message_root, image_path, header):
 
 def _create_data_for_email(data_store_object, filename_1, filename_2=None):
     msg_root = MIMEMultipart("related")
-    msg_root["Subject"] = data_store_object.subject + " V2"
+    msg_root["Subject"] = data_store_object.subject
     msg_root["From"] = data_store_object.from_text
     msg_root["To"] = data_store_object.to_text
     msg_root.preamble = "This is a multi-part message in MIME format, with pictures."

@@ -10,7 +10,8 @@ class DataPickleDownloadException(Exception): pass
 class ChartUploadException(Exception): pass
 
 BUCKET_NAME_SOURCE = os.environ.get('s3_main_bucket')	
-BUCKET_NAME_DEST = os.environ.get('s3_bucket_charts')	
+BUCKET_NAME_DEST = os.environ.get('s3_bucket_charts')
+REGION_NAME = os.environ.get('region_id')
 LOCAL_FOLDER = '/tmp/'
 FOLDER_IN_BUCKET = 'charts-public/'
 HORIZONTAL_SIZE = 794
@@ -20,6 +21,18 @@ LONG_PERIOD_DAYS = 350
 SHORT_PERIOD_DAYS = 50
 
 s3 = boto3.client('s3')
+dynamodb_resource = boto3.resource('dynamodb', region_name=REGION_NAME)
+table = dynamodb_resource.Table('CurrentPortfolioRows')
+
+def _upload_file_to_s3(file_name, bucket=BUCKET_NAME_DEST):
+    print('Function _upload_file_to_s3 started...')
+    object_name = os.path.basename(file_name)
+    try:
+        _ = s3.upload_file(LOCAL_FOLDER+file_name, BUCKET_NAME_DEST, object_name)
+    except Exception as e:
+        exception_message = file_name + '- upload to S3 failed, strange, raise Exception'
+        print(exception_message)
+        raise ChartUploadException(exception_message)
 
 def _prepare_last_date_text(df):
     last_index = df.tail(1).index.item().date()
@@ -35,6 +48,7 @@ def _create_relative_chart(ts_1, ts_2, symbol_1, symbol_2):
     plot_title = "Rel " + symbol_1 + "-" + symbol_2 + ", " + last_date_text
     mpf.plot(data, type="line", style="yahoo", title=plot_title, 
             figsize=(HORIZONTAL_SIZE / MY_PLOTS_DPI, VERTICAL_SIZE / MY_PLOTS_DPI), savefig=LOCAL_FOLDER+filename, )
+    _upload_file_to_s3(filename)
     print('Function _create_relative_chart end - OK')
     return filename
 
@@ -46,6 +60,7 @@ def _create_line_chart(ts, symbol):
     plot_title = symbol + " last 1.5 years, " + last_date_text
     mpf.plot(data, type="line", style="yahoo", title=plot_title, 
             figsize=(HORIZONTAL_SIZE / MY_PLOTS_DPI, VERTICAL_SIZE / MY_PLOTS_DPI), savefig=LOCAL_FOLDER+filename, )
+    _upload_file_to_s3(filename)
     print('Function _create_line_chart end - OK')
     return filename
 
@@ -57,28 +72,9 @@ def _create_candlestick_chart(ts, symbol):
     plot_title = symbol + " 2.5 months, " + last_date_text
     mpf.plot(data, type="candle", style="yahoo", title=plot_title, \
                 volume=True, figsize=(HORIZONTAL_SIZE / MY_PLOTS_DPI, VERTICAL_SIZE / MY_PLOTS_DPI), savefig=LOCAL_FOLDER+filename, )
+    _upload_file_to_s3(filename)
     print('Function _create_candlestick_chart end - OK')
-    return filename
-    
-    
-def _upload_file_to_s3(file_name, bucket=BUCKET_NAME_DEST):
-    """Upload a file to an S3 bucket
-
-    :param file_name: File to upload
-    :param bucket: Bucket to upload to
-    :return: True if file was uploaded, else False
-    """
-    print('Function _upload_file_to_s3 started...')
-    # object_name = FOLDER_IN_BUCKET + os.path.basename(file_name)
-    object_name = os.path.basename(file_name)
-    try:
-        response = s3.upload_file(LOCAL_FOLDER+file_name, BUCKET_NAME_DEST, object_name)
-        # response = s3.put_object(ACL='public-read', Body=LOCAL_FOLDER+file_name, Bucket=BUCKET_NAME_DEST, Key=object_name, )
-    except ClientError as e:
-        print(e)
-        return False
-    print('Function _upload_file_to_s3 finished - OK')        
-    return True
+    return filename        
 
 def _download_pickle_data_from_s3(file_name):
     try:
@@ -107,13 +103,16 @@ def lambda_handler(event, context):
     if event['type'] == 'Stocks_relative_two':
         data_2 = _download_pickle_data_from_s3(event['file_2'])
         chart_filename = _create_relative_chart(data_1, data_2, event['ticker_1'], event['ticker_2'])
-        upload_result = _upload_file_to_s3(chart_filename)
-        if not upload_result:
-            exception_message = chart_filename + '- upload to S3 failed, strange, raise Exception'
-            print(exception_message)
-            raise ChartUploadException(exception_message)
         response_dict = {'type': event['type'], 'note': event['note'], 'ticker_1': event['ticker_1'], 'ticker_2': event['ticker_2'], 'chart_filename': chart_filename }
         response_dict['api_call_count'] = event['api_call_count']
+        item_to_put = {
+                'ticker_combined': event['ticker_1'] + "-" + event['ticker_2'],
+                'type': "Stocks relative",
+                'note': event['note'],
+                'file_1': chart_filename,
+                'file_2': ""
+            }
+        _ = table.put_item(Item=item_to_put)
         return {
         'statusCode': 200,
         'body': response_dict
@@ -123,23 +122,17 @@ def lambda_handler(event, context):
     else:
         ticker_single_ts = event['ticker_1']
     chart_filename_line = _create_line_chart(data_1, ticker_single_ts)
-    upload_result = _upload_file_to_s3(chart_filename_line)
-    if not upload_result:
-        exception_message = chart_filename_line + '- upload to S3 failed, strange, raise Exception'
-        print(exception_message)
-        raise ChartUploadException(exception_message)
     chart_filename_candle = _create_candlestick_chart(data_1, ticker_single_ts)
-    upload_result = _upload_file_to_s3(chart_filename_candle)
-    if not upload_result:
-        exception_message = chart_filename_candle + '- upload to S3 failed, strange, raise Exception'
-        print(exception_message)
-        raise ChartUploadException(exception_message)
-    try:
-        print('event_file_2 - ', event['file_2'])
-    except KeyError:
-        print('event_file_2 - NO')
     response_dict = {'type': event['type'], 'note': event['note'], 'ticker': ticker_single_ts, 'filename_line': chart_filename_line, 'filename_candle': chart_filename_candle}
     response_dict['api_call_count'] = event['api_call_count']
+    item_to_put = {
+                'ticker_combined': ticker_single_ts,
+                'note': event['note'],
+                'file_1': chart_filename_line,
+                'file_2': chart_filename_candle
+            }
+    item_to_put['type'] = "Currency pair" if event['type'] == 'FX' else "Stocks single"
+    _ = table.put_item(Item=item_to_put)
     return {
         'statusCode': 200,
         'body': response_dict

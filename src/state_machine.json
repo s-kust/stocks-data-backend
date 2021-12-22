@@ -80,24 +80,6 @@
                 "BackoffRate": 2
               }
             ],
-            "Next": "Update Success Imports List"
-          },
-          "Update Success Imports List": {
-            "Type": "Task",
-            "Resource": "${UpdateSuccessImportListArn}",
-            "Retry": [
-              {
-                "ErrorEquals": [
-                  "Lambda.ServiceException",
-                  "Lambda.AWSLambdaException",
-                  "Lambda.SdkClientException"
-                ],
-                "IntervalSeconds": 2,
-                "MaxAttempts": 6,
-                "BackoffRate": 2
-              }
-            ],
-            "ResultPath": null,
             "Next": "Send Email WIth Charts"
           },
           "Send Email WIth Charts": {
