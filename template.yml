@@ -64,7 +64,7 @@ Resources:
           Properties:
             Description: Schedule to run the stocks data processing state machine every business day in the evening.
             Enabled: True 
-            Schedule: "cron(25 23 ? * MON-FRI *)"
+            Schedule: "cron(15 23 ? * MON-FRI *)"
       Policies: 
         - LambdaInvokePolicy:
             FunctionName: !Ref CreateTickersFromSpreadsheet
