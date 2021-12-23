@@ -40,7 +40,7 @@ def _prepare_last_date_text(df):
     return last_date_text
 
 def _create_relative_chart(ts_1, ts_2, symbol_1, symbol_2):
-    print('Function _create_relative_chart started...')
+    print('Function _create_relative_chart started - ', symbol_1, '-', symbol_2)
     filename = 'rel_' + symbol_1 + "_" + symbol_2 + ".png"
     data = ts_1 / ts_2
     data = data.tail(LONG_PERIOD_DAYS)
@@ -53,7 +53,7 @@ def _create_relative_chart(ts_1, ts_2, symbol_1, symbol_2):
     return filename
 
 def _create_line_chart(ts, symbol):
-    print('Function _create_line_chart started...')
+    print('Function _create_line_chart started - ', symbol)
     filename = "long_period_" + symbol + ".png"
     data = ts.tail(LONG_PERIOD_DAYS)
     last_date_text = _prepare_last_date_text(data)
@@ -65,7 +65,7 @@ def _create_line_chart(ts, symbol):
     return filename
 
 def _create_candlestick_chart(ts, symbol):
-    print('Function _create_candlestick_chart started...')
+    print('Function _create_candlestick_chart started - ', symbol)
     filename = "short_period_" + symbol + ".png"
     data = ts.tail(SHORT_PERIOD_DAYS)
     last_date_text = _prepare_last_date_text(data)
@@ -96,43 +96,93 @@ def _download_pickle_data_from_s3(file_name):
     print(file_name, ' - downloaded, passed checks for pd.Dataframe, OHLC columns')
     return data
             
+def process_stocks_relative_two(event_internal):
+    print("Function process_stocks_relative_two started - ", event_internal['ticker_1'], "-", event_internal['ticker_2'])
+    data_1 = _download_pickle_data_from_s3(event_internal['file_1'])
+    data_2 = _download_pickle_data_from_s3(event_internal['file_2'])
+    chart_filename = _create_relative_chart(data_1, data_2, event_internal['ticker_1'], event_internal['ticker_2'])
+    response_dict = {
+        'type': event_internal['type'], 
+        'note': event_internal['note'], 
+        'ticker_1': event_internal['ticker_1'], 
+        'ticker_2': event_internal['ticker_2'], 
+        'chart_filename': chart_filename,
+        'api_call_count': event_internal['api_call_count']
+        }
+    # now update successfully processed rows table 
+    # and return response_dict
+    item_to_put = {
+            'ticker_combined': event_internal['ticker_1'] + "-" + event_internal['ticker_2'],
+            'type': "Stocks relative",
+            'note': event_internal['note'],
+            'file_1': chart_filename,
+            'file_2': ""
+        }
+    _ = table.put_item(Item=item_to_put)    
+    return response_dict
+
+def _create_charts_line_candle(data_df, ticker_id):
+    chart_filename_line = _create_line_chart(data_df, ticker_id)
+    chart_filename_candle = _create_candlestick_chart(data_df, ticker_id)
+    return chart_filename_line, chart_filename_candle
+
+def process_stocks_single(event_internal):
+    print("Function process_stocks_single started - ", event_internal['ticker_1'])
+    data_1 = _download_pickle_data_from_s3(event_internal['file_1'])
+    filename_line, filename_candle = _create_charts_line_candle(data_1, event_internal['ticker_1'])
+    response_dict = {
+        'type': event_internal['type'], 
+        'note': event_internal['note'], 
+        'ticker': event_internal['file_1'], 
+        'filename_line': filename_line, 
+        'filename_candle': filename_candle,
+        'api_call_count': event_internal['api_call_count']
+        }
+    item_to_put = {
+                'ticker_combined': event_internal['file_1'],
+                'type': "Stocks single",
+                'note': event_internal['note'],
+                'file_1': filename_line,
+                'file_2': filename_candle
+            }
+    _ = table.put_item(Item=item_to_put)
+    return response_dict
+
+def process_fx_row(event_internal):
+    fx_ticker_id = event_internal['ticker_1'] + '-' + event_internal['ticker_2']
+    print("Function process_fx_row started - ", fx_ticker_id)
+    data_1 = _download_pickle_data_from_s3(event_internal['file_1'])
+    filename_line, filename_candle = _create_charts_line_candle(data_1, fx_ticker_id)
+    response_dict = {
+        'type': event_internal['type'], 
+        'note': event_internal['note'], 
+        'ticker': fx_ticker_id, 
+        'filename_line': filename_line, 
+        'filename_candle': filename_candle,
+        'api_call_count': event_internal['api_call_count']
+        }
+    item_to_put = {
+                'ticker_combined': fx_ticker_id,
+                'type': "Currency pair",
+                'note': event_internal['note'],
+                'file_1': filename_line,
+                'file_2': filename_candle
+            }
+    _ = table.put_item(Item=item_to_put)
+    return response_dict
+    
 def lambda_handler(event, context):
     # print("Incoming event:")
     # print(event)
-    data_1 = _download_pickle_data_from_s3(event['file_1'])
+    response_dict = None
     if event['type'] == 'Stocks_relative_two':
-        data_2 = _download_pickle_data_from_s3(event['file_2'])
-        chart_filename = _create_relative_chart(data_1, data_2, event['ticker_1'], event['ticker_2'])
-        response_dict = {'type': event['type'], 'note': event['note'], 'ticker_1': event['ticker_1'], 'ticker_2': event['ticker_2'], 'chart_filename': chart_filename }
-        response_dict['api_call_count'] = event['api_call_count']
-        item_to_put = {
-                'ticker_combined': event['ticker_1'] + "-" + event['ticker_2'],
-                'type': "Stocks relative",
-                'note': event['note'],
-                'file_1': chart_filename,
-                'file_2': ""
-            }
-        _ = table.put_item(Item=item_to_put)
-        return {
-        'statusCode': 200,
-        'body': response_dict
-    }
+        response_dict = process_stocks_relative_two(event)
     if event['type'] == 'FX':
-        ticker_single_ts = event['ticker_1'] + '_' + event['ticker_2']
-    else:
-        ticker_single_ts = event['ticker_1']
-    chart_filename_line = _create_line_chart(data_1, ticker_single_ts)
-    chart_filename_candle = _create_candlestick_chart(data_1, ticker_single_ts)
-    response_dict = {'type': event['type'], 'note': event['note'], 'ticker': ticker_single_ts, 'filename_line': chart_filename_line, 'filename_candle': chart_filename_candle}
-    response_dict['api_call_count'] = event['api_call_count']
-    item_to_put = {
-                'ticker_combined': ticker_single_ts,
-                'note': event['note'],
-                'file_1': chart_filename_line,
-                'file_2': chart_filename_candle
-            }
-    item_to_put['type'] = "Currency pair" if event['type'] == 'FX' else "Stocks single"
-    _ = table.put_item(Item=item_to_put)
+        response_dict = process_fx_row(event)
+    if event['type'] == 'Stocks_single':
+        response_dict = process_stocks_single(event)
+    if response_dict is None:
+        raise TypeError("Wrong portfolio row type")
     return {
         'statusCode': 200,
         'body': response_dict
