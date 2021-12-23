@@ -72,46 +72,51 @@ def _create_data_for_email(data_store_object, filename_1, filename_2=None):
     msg_alternative.attach(msg_text)
     return msg_root
 
+def prepare_email_data_one_chart(event_internal):
+    subject_str = "Relative " + event_internal['ticker_1'] + "-" + event_internal['ticker_2']
+    local_file_name = LOCAL_FOLDER + event_internal['chart_filename']
+    s3.download_file(BUCKET_NAME, event_internal['chart_filename'], local_file_name)
+    mail_imputs_data_store = DataStore(subject_str, event_internal['note'])
+    msg = _create_data_for_email(mail_imputs_data_store, local_file_name)
+    return msg, mail_imputs_data_store
+
+def prepare_email_data_two_charts(event_internal):
+    subject_str = "Idea: " + event_internal['ticker']
+    local_line_plot_file_name = LOCAL_FOLDER + event_internal['filename_line']
+    s3.download_file(BUCKET_NAME, event_internal['filename_line'], local_line_plot_file_name)
+    local_candle_chart_file_name = LOCAL_FOLDER + event_internal['filename_candle']
+    s3.download_file(BUCKET_NAME, event_internal['filename_candle'], local_candle_chart_file_name)
+    mail_imputs_data_store = DataStore(subject_str, event_internal['note'])
+    msg = _create_data_for_email(mail_imputs_data_store, local_line_plot_file_name, local_candle_chart_file_name)
+    return msg, mail_imputs_data_store
+
 def lambda_handler(event, context):
     # print("Incoming event:")
     # print(event)
+    mail_imputs = None
     try:
         if event['type'] == "Stocks_relative_two":
-            subject_str = "Relative " + event['ticker_1'] + "-" + event['ticker_2']
-            local_file_name = LOCAL_FOLDER + event['chart_filename']
-            s3.download_file(BUCKET_NAME, event['chart_filename'], local_file_name)
-            mail_imputs_data_store = DataStore(subject_str, event['note'])
-            msg = _create_data_for_email(mail_imputs_data_store, local_file_name)
+            msg_data, mail_imputs = prepare_email_data_one_chart(event)
         if (event['type'] == "Stocks_single") or (event['type'] == "FX"):
-            subject_str = "Idea: " + event['ticker']
-            local_line_plot_file_name = LOCAL_FOLDER + event['filename_line']
-            s3.download_file(BUCKET_NAME, event['filename_line'], local_line_plot_file_name)
-            local_candle_chart_file_name = LOCAL_FOLDER + event['filename_candle']
-            s3.download_file(BUCKET_NAME, event['filename_candle'], local_candle_chart_file_name)
-            mail_imputs_data_store = DataStore(subject_str, event['note'])
-            msg = _create_data_for_email(mail_imputs_data_store, local_line_plot_file_name, local_candle_chart_file_name)
+            msg_data, mail_imputs = prepare_email_data_two_charts(event)
     except Exception as e:
         print("Exception occured during data preparation for sending e-mail:")
         print(e)        
         print('event: ', event)
         raise e
+    if mail_imputs is None:
+        raise TypeError("In function send_email_with_pics: wrong incoming event type")
     try:
         response = ses_client.send_raw_email(
-            Source=mail_imputs_data_store.from_text,
+            Source=mail_imputs.from_text,
             Destinations=[
-                mail_imputs_data_store.to_text
+                mail_imputs.to_text
             ],
             RawMessage={
-                'Data':msg.as_string(),
+                'Data':msg_data.as_string(),
             },
         )
-    # Display an error if something goes wrong. 
-    except ClientError as e:
-        print(e.response['Error']['Message'])
-        print('event: ', event)
-        raise e
     except Exception as e:
-        print("Other exception occured during e-mail sending:")
         print(e)        
         print('event: ', event)
         raise e

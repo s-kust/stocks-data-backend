@@ -13,11 +13,11 @@ ses_client = boto3.client('ses',region_name=REGION_ID)
 def lambda_handler(event, context):
     # print("Incoming event:")
     # print(event)
-    try:
+    if event['failed_ticker']:
         email_subject = "Trading App: problem with ticker " + event['failed_ticker']
         body_html = "<html><head></head><body><p>Trading App: problem with ticker - %s</p></body></html>" %  (event['failed_ticker'])
         body_text = "Trading App: problem with ticker: %s" %  (event['failed_ticker'])
-    except Exception as e:
+    else:
         email_subject = "Trading App: problem "
         body_html = "<html><head></head><body><p>Trading App: problem, failed_ticker not specified</p><p>Execution Id - %s</p>" % (event['Payload']['executionId'])
         body_html = body_html + "<p>%s</p></body></html>" %  (event['Payload']['Payload'])
@@ -46,7 +46,9 @@ def lambda_handler(event, context):
         Source=SENDER,
     )
     except ClientError as e:
+        print("Failed to send e-mail with problem notification!")
         print(e.response['Error']['Message'])
+        raise e
     else:
         print("Email sent! Message ID: ", response['MessageId'])
                 
