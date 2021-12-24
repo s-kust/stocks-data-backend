@@ -20,7 +20,7 @@ Additional report types can be easily added as needed.
 
 The system consists of the AWS Lambda backend and a React frontend. This repository contains the code of the backend. It has several Python functions coordinated by the state machine. 
 
-![State machine schema](/misc/sm-schema.PNG) 
+![State machine schema](/misc/sm-schema.png) 
 
 All of these resources are integrated into the AWS CloudFormation template for fast and easy deployment.
 
