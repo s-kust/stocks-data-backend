@@ -11,6 +11,8 @@ You can run the workflow regularly at suitable intervals. For example, on busine
 
 In addition to email, you can see the recent charts online using the [frontend](https://github.com/s-kust/amplifyapp/). 
 
+![frontend screenshot](/misc/frontend-screen.png)
+
 The system currently supports the following types of reports:
 1. Single stock or ETF.
 2. Relative performance of two tickers.
@@ -46,7 +48,11 @@ Now you have to manually load the state machine definition file `/src/state_mach
 
 After all there preparations, run the bash script `1-create-bucket.sh`. Make sure that the `bucket-name.txt` file appeared in the root directory and that one more S3 bucket has been created. This step only needs to be done once.
 
-Check carefully all the input parameters in the `template.yml` file and then run the `3-deploy.sh` script. If the deployment was successful, go to the AWS Step Functions console and run the newly created state machine for testing. In addition to the real portfolio items, you can add several erroneous tickers to the spreadsheet to see how the system handles errors.
+Check carefully all the input parameters in the `template.yml` file and then run the `3-deploy.sh` script. If the deployment was successful, go to the AWS Step Functions console and run the newly created state machine for testing. 
+
+In addition to the real portfolio items, you can add several erroneous tickers to the spreadsheet to see how the system handles errors. Make sure you receive error notification emails. Also, the system should continue processing subsequent portfolio rows after it encounters an erroneous ticker.
+
+![Error email notification](/misc/problem-email.png)
 
 After testing the state machine, go to the AWS API Gateway console and make sure that the newly created API works OK. The frontend will call it and use its data.
 
@@ -62,7 +68,7 @@ This repository contains the following examples:
 1. The state machine of medium complexity. It uses `map`. Also, it catches and handles errors that may occur in Lambda functions. See its definition in the `/src/state_machine.json` file.
 2. Integration of the state machine into the AWS CloudFormation template.
 3. Passing environment variables to AWS Lambda functions through the AWS CloudFormation template.
-4. How to filter files in the S3 buclet by name, as well as by the date and time of their last update. See the functions `create-tickers-df-from-spreadsheet` and `import-all-row-tickers`.
+4. How to filter files in the S3 bucket by name, as well as by the date and time of their last update. See the functions `create-tickers-df-from-spreadsheet` and `import-all-row-tickers`.
 5. In the `create-tickers-df-from-spreadsheet` function, working with a Google Spreadsheet document using the `gspread` library.
 6. The function `import-all-row-tickers` receives seveal kinds of data from Alpha Vantage through its API. It carefully validates the obtained data before transferring it for further processing.
 7. The system pauses in order not to send requests to Alpha Vantage API too often and not to exceed the allowed limit. This logic is implemented in the state machine and not inside the Lambda functions.
