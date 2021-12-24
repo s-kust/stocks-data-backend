@@ -90,22 +90,7 @@ def prepare_email_data_two_charts(event_internal):
     msg = _create_data_for_email(mail_imputs_data_store, local_line_plot_file_name, local_candle_chart_file_name)
     return msg, mail_imputs_data_store
 
-def lambda_handler(event, context):
-    # print("Incoming event:")
-    # print(event)
-    mail_imputs = None
-    try:
-        if event['type'] == "Stocks_relative_two":
-            msg_data, mail_imputs = prepare_email_data_one_chart(event)
-        if (event['type'] == "Stocks_single") or (event['type'] == "FX"):
-            msg_data, mail_imputs = prepare_email_data_two_charts(event)
-    except Exception as e:
-        print("Exception occured during data preparation for sending e-mail:")
-        print(e)        
-        print('event: ', event)
-        raise e
-    if mail_imputs is None:
-        raise TypeError("In function send_email_with_pics: wrong incoming event type")
+def send_email_with_data(mail_imputs, msg_data):
     try:
         response = ses_client.send_raw_email(
             Source=mail_imputs.from_text,
@@ -123,9 +108,28 @@ def lambda_handler(event, context):
     else:
         print("Email sent! Message ID:"),
         print(response['MessageId'])
+    return response['MessageId']
+
+def lambda_handler(event, context):
+    # print("Incoming event:")
+    # print(event)
+    inputs_data_store = None
+    try:
+        if event['type'] == "Stocks_relative_two":
+            msg, inputs_data_store = prepare_email_data_one_chart(event)
+        if (event['type'] == "Stocks_single") or (event['type'] == "FX"):
+            msg, inputs_data_store = prepare_email_data_two_charts(event)
+    except Exception as e:
+        print("Exception occured during data preparation for sending e-mail:")
+        print(e)        
+        print('event: ', event)
+        raise e
+    if inputs_data_store is None:
+        raise TypeError("In function send_email_with_pics: wrong incoming event type")
+    sent_email_id = send_email_with_data(inputs_data_store, msg)
     
     return {
         'statusCode': 200,
-        'body': {'email_message_id': response['MessageId']}
+        'body': {'email_message_id': sent_email_id}
     }
     

@@ -50,19 +50,15 @@ def delete_outdated_pickle_files():
     files_to_delete = []
     date_now = dt.now(timezone.utc)
     for elem in list_response['Contents']:
-        condition_suffix = elem['Key'].endswith('.pkl')
-        if not condition_suffix:
+        if not elem['Key'].endswith('.pkl'):
             continue
-        else:
-            print('Found .pkl file - ', elem['Key'], ' - now check its age...')
-            file_age =  date_now - elem['LastModified']
-            condition_outdated = (file_age > timedelta(hours=12))
-            print('file_age', file_age)
-            print('condition_outdated', condition_outdated)
-            if condition_outdated:
-                files_to_delete.append({'Key':elem['Key']})
+        file_age =  date_now - elem['LastModified']
+        condition_outdated = (file_age > timedelta(hours=12))
+        print(elem['Key'], 'file_age -', file_age)
+        if condition_outdated:
+            files_to_delete.append({'Key':elem['Key']})
     if files_to_delete:
-        print('Found outdated pickle files, now delete them:')
+        print('Found outdated pickle files:')
         for obj in files_to_delete:
             print(obj['Key'])
         _ = s3.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': files_to_delete})
@@ -75,9 +71,7 @@ def clear_success_imports_db_table():
     if 'CurrentPortfolioRows' in table_names:
         print("Table CurrentPortfolioRows found, now drop all items")
         table = dynamodb_resource.Table('CurrentPortfolioRows')
-        print("Before deletion, number of items in table:")
         scan = table.scan(ConsistentRead=True)
-        print(scan['Count'])
         with table.batch_writer() as batch:
             for each in scan['Items']:
                 batch.delete_item(
@@ -85,45 +79,31 @@ def clear_success_imports_db_table():
                         'ticker_combined': each['ticker_combined']
                     }
                 )
-        print("After deletion, number of items:")
-        scan = table.scan(ConsistentRead=True)
-        print(scan['Count'])
     else:
         print("Table CurrentPortfolioRows not found, so now create it")
-        try:
-            table = dynamodb_resource.create_table(
-            TableName='CurrentPortfolioRows',
-            KeySchema=[
+        key_schema = [
                 {
                     'AttributeName': 'ticker_combined',
                     'KeyType': 'HASH' 
                 }
-            ],
-            AttributeDefinitions=[
+            ]
+        attribute_definitions = [
                 {
                     'AttributeName': 'ticker_combined',
                     'AttributeType': 'S'
                 }
-            ],
-            ProvisionedThroughput={
+            ]
+        provisioned_throughput = {
                 'ReadCapacityUnits': 10,
                 'WriteCapacityUnits': 10
                 }
-            )
-            table.meta.client.get_waiter('table_exists').wait(TableName='CurrentPortfolioRows', WaiterConfig={'Delay': 1})
-            print("Table created:")
-            print("After creation, number of items:")
-            scan = table.scan(ConsistentRead=True)
-            print(scan['Count'])
-            print()
-        except ClientError as ce:
-            print("ClientError occured")
-            if ce.response['Error']['Code'] == 'ResourceInUseException':
-                print("ResourceInUseException occured")
-            else:
-                print("Unknown exception:")
-                print(ce.response)
-                raise ce
+        table = dynamodb_resource.create_table(
+        TableName = 'CurrentPortfolioRows',
+        KeySchema = key_schema,
+        AttributeDefinitions = attribute_definitions,
+        ProvisionedThroughput = provisioned_throughput
+        )
+        table.meta.client.get_waiter('table_exists').wait(TableName='CurrentPortfolioRows', WaiterConfig={'Delay': 1})
 
 def get_list_of_dics_from_spreadsheet(secret_json):
     try:
@@ -139,12 +119,13 @@ def get_list_of_dics_from_spreadsheet(secret_json):
     # leading and lagging spaces often appear when copy-paste ticker codes, remove them
     for row_dict in data_list_of_dics:
         for elem in row_dict:
-            row_dict[elem] = row_dict[elem].strip() if isinstance(row_dict[elem], str) else row_dict[elem]    
-    ideas_df = pd.DataFrame.from_dict(sheet_0.get_all_records())
-    ideas_df.replace("", np.nan, inplace=True)
-    return data_list_of_dics, ideas_df
+            row_dict[elem] = row_dict[elem].strip() if isinstance(row_dict[elem], str) else row_dict[elem]        
+    df_for_validation = pd.DataFrame.from_dict(sheet_0.get_all_records()) 
+    portfolio_rows_validation(df_for_validation)
+    return data_list_of_dics
 
-def check_portfolio_rows_validation_conditions(df_to_check_conditions):
+def portfolio_rows_validation(df_to_check_conditions):
+    df_to_check_conditions.replace("", np.nan, inplace=True)
     condition_all_and_only_required_columns = ("Ticker1" in df_to_check_conditions.columns) & ("Ticker2" in df_to_check_conditions.columns) \
            & ("Note" in df_to_check_conditions.columns) & ("Type" in df_to_check_conditions.columns) \
            & (len(df_to_check_conditions.columns) == 4)
@@ -172,8 +153,7 @@ def lambda_handler(event, context):
     delete_outdated_pickle_files()
     clear_success_imports_db_table()
     secret = get_secret()        
-    data_to_return, portfolio_rows_df = get_list_of_dics_from_spreadsheet(secret)
-    check_portfolio_rows_validation_conditions(portfolio_rows_df)
+    data_to_return = get_list_of_dics_from_spreadsheet(secret)
         
     files_to_delete = []
     files_to_delete.append({'Key':'failed_imports.pkl'})

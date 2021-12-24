@@ -43,10 +43,10 @@ def _create_relative_chart(ts_1, ts_2, symbol_1, symbol_2):
     print('Function _create_relative_chart started - ', symbol_1, '-', symbol_2)
     filename = 'rel_' + symbol_1 + "_" + symbol_2 + ".png"
     data = ts_1 / ts_2
-    data = data.tail(LONG_PERIOD_DAYS)
-    last_date_text = _prepare_last_date_text(data)
-    plot_title = "Rel " + symbol_1 + "-" + symbol_2 + ", " + last_date_text
-    mpf.plot(data, type="line", style="yahoo", title=plot_title, 
+    data_relative = data.tail(LONG_PERIOD_DAYS)
+    last_date_text = _prepare_last_date_text(data_relative)
+    title_relative = "Rel " + symbol_1 + "-" + symbol_2 + ", " + last_date_text
+    mpf.plot(data_relative, type="line", style="yahoo", title=title_relative, 
             figsize=(HORIZONTAL_SIZE / MY_PLOTS_DPI, VERTICAL_SIZE / MY_PLOTS_DPI), savefig=LOCAL_FOLDER+filename, )
     _upload_file_to_s3(filename)
     print('Function _create_relative_chart end - OK')
@@ -55,10 +55,10 @@ def _create_relative_chart(ts_1, ts_2, symbol_1, symbol_2):
 def _create_line_chart(ts, symbol):
     print('Function _create_line_chart started - ', symbol)
     filename = "long_period_" + symbol + ".png"
-    data = ts.tail(LONG_PERIOD_DAYS)
-    last_date_text = _prepare_last_date_text(data)
-    plot_title = symbol + " last 1.5 years, " + last_date_text
-    mpf.plot(data, type="line", style="yahoo", title=plot_title, 
+    data_line = ts.tail(LONG_PERIOD_DAYS)
+    last_date_text = _prepare_last_date_text(data_line)
+    title_line = symbol + " last 1.5 years, " + last_date_text
+    mpf.plot(data_line, type="line", style="yahoo", title=title_line, 
             figsize=(HORIZONTAL_SIZE / MY_PLOTS_DPI, VERTICAL_SIZE / MY_PLOTS_DPI), savefig=LOCAL_FOLDER+filename, )
     _upload_file_to_s3(filename)
     print('Function _create_line_chart end - OK')
@@ -133,13 +133,13 @@ def process_stocks_single(event_internal):
     response_dict = {
         'type': event_internal['type'], 
         'note': event_internal['note'], 
-        'ticker': event_internal['file_1'], 
+        'ticker': event_internal['ticker_1'], 
         'filename_line': filename_line, 
         'filename_candle': filename_candle,
         'api_call_count': event_internal['api_call_count']
         }
     item_to_put = {
-                'ticker_combined': event_internal['file_1'],
+                'ticker_combined': event_internal['ticker_1'],
                 'type': "Stocks single",
                 'note': event_internal['note'],
                 'file_1': filename_line,
