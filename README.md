@@ -1,146 +1,52 @@
-# Start from scratch starter project
+# Daily Portfolio Positions Reports: Backend
 
-This project contains source code and supporting files for the serverless application that you created in the AWS Lambda console. You can update your application at any time by committing and pushing changes to your AWS CodeCommit or GitHub repository.
+The system workflow:
 
-This project includes the following files and folders:
+1. Load a list of portfolio rows from Google Spreadsheet. 
+2. For each row, import its tickers recent data using the data provider's API
+3. Plot the charts and save them on the hard drive or in the S3 bucket.
+3. Generate a report with charts and send it to the email. 
 
-- src - Code for the application's Lambda function.
-- \_\_tests__ - Unit tests for the application code.
-- template.yml - A SAM template that defines the application's AWS resources.
-- buildspec.yml -  A build specification file that tells AWS CodeBuild how to create a deployment package for the function.
+You can run the workflow regularly at suitable intervals. For example, on business days in the morning and again 15 minutes before the end of the trading time. In addition to email, you can see the recent charts online. 
 
-Your Lambda application includes two AWS CloudFormation stacks. The first stack creates the pipeline that builds and deploys your application.
+![Portfolio watchlist spreadsheet example](/misc/1.PNG)
 
-For a full list of possible operations, see the [AWS Lambda Applications documentation](https://docs.aws.amazon.com/lambda/latest/dg/deploying-lambda-apps.html).
+The system currently supports three types of reports:
+1. Single stock or ETF.
+2. Relative performance of two tickers.
+3. FX currencies pair. 
 
-## Try the application out
+Additional report types can be easily added as needed.
 
-1. Go to the Lambda console.
-2. Select **Applications** and select the one you created.
-3. Select **helloFromLambdaFunction** in the **Resources** table.
-4. Create a test event with the default settings. (Select **Select a test event** -> select **Configure test events** -> type in **Event name** -> select **Create**)
-5. Select **Test** and you can see the result.
+The system consists of the AWS Lambda backend and a React frontend. This repository contains the code of the backend. It has several Python functions coordinated by the state machine. All of these resources are integrated into the AWS CloudFormation template for easy deployment.
 
-## Add a resource to your application
+The frontend is an AWS Amplify React application. Please see [its repository](https://github.com/s-kust/amplifyapp/) with the codebase and setup instructions.
 
-The application template uses the AWS Serverless Application Model (AWS SAM) to define application resources. AWS SAM is an extension of AWS CloudFormation with a simpler syntax for configuring common serverless application resources, such as functions, triggers, and APIs. For resources that aren't included in the [AWS SAM specification](https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md), you can use the standard [AWS CloudFormation resource types](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html).
+<h2>Deployment manual</h2>
 
-Update `template.yml` to add a dead-letter queue to your application. In the **Resources** section, add a resource named **MyQueue** with the type **AWS::SQS::Queue**.
+First, prepare the Google spreadsheet with the list of stocks and currency pairs tickers to be traced.
 
-```
-Resources:
-  MyQueue:
-    Type: AWS::SQS::Queue
-```
+![Watchlist spreadsheet example](/misc/1.PNG) 
 
-The dead-letter queue is a location for Lambda to send events that could not be processed. It's only used if you invoke your function asynchronously, but it's useful here to show how you can modify your application's resources and function configuration.
+To enable the script to work with that spreadsheet, follow [these instructions](https://www.twilio.com/blog/2017/02/an-easy-way-to-read-and-write-to-a-google-spreadsheet-in-python.html). If the page is not available, use the [archived PDF version](/misc/Google_Spreadsheets_Python.pdf).
+   1. You'll have to go to the Google APIs Console, create a new project, enable API, etc. 
+   1. Note that you must give the spreadsheet editing rights to your function, not just viewing, although in our case it does not perform any editing.
+   1. Prepare the values and save the following key-value pairs in the AWS Secrets Manager: `type`, `project_id`, `private_key_id`, `private_key`, `client_email`, `client_id`, `auth_uri`, `token_uri`, `auth_provider_x509_cert_url`, `client_x509_cert_url`. 
+   1. The name of the secret may be `portfolio_spreadsheet`, otherwise change it in the AWS CloudFormation template parameter `SecretId`.
 
-Commit the change and push.
+Prepare the [Alpha Vantage](https://www.alphavantage.co/) API key and save it in the AWS Secrets Manager secret named `alpha_vantage_api_key` with the same key.
 
-```bash
-my-application$ git commit -am "Add dead-letter queue."
-my-application$ git push
-```
+Create two AWS S3 buckets for data and generated charts. Paste their names in the AWS CloudFormation template parameters `BucketMainData` and `BucketCharts`. Note that the objects in the charts bucket must be publicly accessible. 
 
-**To see how the pipeline processes and deploys the change**
+Now you have to manually load the state machine definition file `/src/state_machine.json` into the data S3 bucket. After that, check out the `DefinitionUri` parameter in the `template.yml` file. Unfortunately, I was unable to simplify this step. The system does not accept the state machine definition from the local file.
 
-1. Open the [**Applications**](https://console.aws.amazon.com/lambda/home#/applications) page.
-1. Choose your application.
-1. Choose **Deployments**.
+After all there preparations, run the bash script `1-create-bucket.sh`. Make sure that the `bucket-name.txt` file appeared in the root directory and that one more S3 bucket has been created. This step only needs to be done once.
 
-When the deployment completes, view the application resources on the **Overview** tab to see the new resource.
+Check carefully all the input parameters in the `template.yml` file and then run the `3-deploy.sh` script. If the deployment was successful, go to the AWS Step Functions console and run the newly created state machine for testing. In addition to the real portfolio items, you can add several erroneous tickers to the spreadsheet to see how the system handles errors.
 
-## Update the permissions boundary
+After testing the state machine, go to the AWS API Gateway console and make sure that the newly created API works OK. The frontend will call it and use the data it receives from it.
 
-The sample application applies a **permissions boundary** to its function's execution role. The permissions boundary limits the permissions that you can add to the function's role. Without the boundary, users with write access to the project repository could modify the project template to give the function permission to access resources and services outside of the scope of the sample application.
+Whenever you want to redeploy the system, you just need to run the `3-deploy.sh` script again. The system automatically detects all changes made to the files and deploys them.
 
-In order for the function to use the queue that you added in the previous step, you must extend the permissions boundary. The Lambda console detects resources that aren't in the permissions boundary and provides an updated policy that you can use to update it.
+There is a `5-cleanup.sh` script provided in the root directory. It automates the removal of the system and all its associated AWS resources. Please note that it uninstalls the backend only. To get rid of the frontend, you need to carry out a separate removal of the AWS Amplify application.
 
-**To update the application's permissions boundary**
-
-1. Open the [**Applications**](https://console.aws.amazon.com/lambda/home#/applications) page.
-1. Choose your application.
-1. Choose **Edit permissions boundary**.
-1. Follow the instructions shown to update the boundary to allow access to the new queue.
-
-## Update the function configuration
-
-Now you can grant the function permission to access the queue and configure the dead-letter queue setting.
-
-In the function's properties in `template.yml`, add the **DeadLetterQueue** configuration. Under Policies, add **SQSSendMessagePolicy**. **SQSSendMessagePolicy** is a [policy template](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html) that grants the function permission to send messages to a queue.
-
-```
-Resources:
-  MyQueue:
-    Type: AWS::SQS::Queue
-  helloFromLambdaFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: ./
-      Handler: src/handlers/hello-from-lambda.helloFromLambdaHandler
-      Runtime: nodejs14.x
-      MemorySize: 128
-      Timeout: 60
-      DeadLetterQueue:
-        Type: SQS
-        TargetArn: !GetAtt MyQueue.Arn
-      Policies:
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt MyQueue.QueueName
-        - AWSLambdaBasicExecutionRole
-```
-
-Commit and push the change. When the deployment completes, view the function in the console to see the updated configuration that specifies the dead-letter queue.
-
-## Build and test locally
-
-The AWS SAM command line interface (CLI) is an extension of the AWS CLI that adds functionality for building and testing Lambda applications. It uses Docker to run your functions in an Amazon Linux environment that matches Lambda. It can also emulate your application's build environment and API.
-
-If you prefer to use an integrated development environment (IDE) to build and test your application, you can use the AWS Toolkit.
-The AWS Toolkit is an open-source plugin for popular IDEs that uses the AWS SAM CLI to build and deploy serverless applications on AWS. The AWS Toolkit also adds step-through debugging for Lambda function code.
-
-To get started, see the following:
-
-* [PyCharm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [IntelliJ](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [VS Code](https://docs.aws.amazon.com/toolkit-for-vscode/latest/userguide/welcome.html)
-* [Visual Studio](https://docs.aws.amazon.com/toolkit-for-visual-studio/latest/user-guide/welcome.html)
-
-To use the AWS SAM CLI with this sample, you need the following tools:
-
-* AWS CLI - [Install the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html) and [configure it with your AWS credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html).
-* AWS SAM CLI - [Install the AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html).
-* Docker - [Install Docker community edition](https://hub.docker.com/search/?type=edition&offering=community).
-
-Build your application with the `sam build` command.
-
-```bash
-my-application$ sam build -m package.json
-```
-
-The AWS SAM CLI installs dependencies that are defined in `package.json`, creates a deployment package, and saves its contents in the `.aws-sam/build` folder.
-
-Run functions locally and invoke them with the `sam local invoke` command.
-
-```bash
-my-application$ sam local invoke helloFromLambdaFunction --no-event
-```
-
-## Unit tests
-
-Requirements:
-
-* Node.js - [Install Node.js 14.x](https://nodejs.org/en/), including the npm package management tool.
-
-Tests are defined in the \_\_tests__ folder in this project. Use `npm` to install the [Jest test framework](https://jestjs.io/) and run unit tests.
-
-```bash
-my-application$ npm install
-my-application$ npm run test
-```
-
-## Resources
-
-For an introduction to the AWS SAM specification, the AWS SAM CLI, and serverless application concepts, see the [AWS SAM Developer Guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html).
-
-Next, you can use the AWS Serverless Application Repository to deploy ready-to-use apps that go beyond Hello World samples and learn how authors developed their applications. For more information, see the [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/) and the [AWS Serverless Application Repository Developer Guide](https://docs.aws.amazon.com/serverlessrepo/latest/devguide/what-is-serverlessrepo.html).
