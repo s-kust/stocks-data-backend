@@ -58,13 +58,13 @@ def _prepare_stock_ticker_import_url(stock_ticker):
         
     
 def _import_preprocess_ticker_data(alpha_vantage_url):
-    print('Starting _import_preprocess_ticker_data function with url:')
+    print('Starting Alpha Vantage data import from url:')
     print(alpha_vantage_url)
     try:
         data = pd.read_csv(alpha_vantage_url, index_col='timestamp', parse_dates=True)
     except Exception as e:
         print ('Problem with pd.read_csv(alpha_vantage_url) operation')
-        print('alpha_vantage_url - ', alpha_vantage_url)
+        print('Alpha Vvantage_url - ', alpha_vantage_url)
         print(e)
         return False
     all_required_columns_present = all(item in data.columns for item in ['open','high','low','close'])
@@ -77,7 +77,7 @@ def _import_preprocess_ticker_data(alpha_vantage_url):
         data.rename(columns={'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close'}, inplace=True)
         data = data.drop(['dividend_amount', 'split_coefficient'], axis=1, errors='ignore')
     except Exception as e:
-        print ('Import from AV - OK, but problem with data preprocessing')
+        print ('Import from Alpha Vantage - OK, but problem with data preprocessing')
         print(e)
         return False
     return data
@@ -91,7 +91,7 @@ def upload_pickle_file(data_to_upload, file_name_key):
         raise FileUploadFailureException(file_name_key, ' - failed to upload to S3')
 
 def _failed_imports_new_append_upload(ticker_id, failed_imports_param):
-    print(ticker_id, ' import from AV failed!')
+    print(ticker_id, ' import from Alpha Vantage failed!')
     failed_imports_param.append(ticker_id)
     print('failed_imports -', failed_imports_param)
     upload_pickle_file(failed_imports_param, FAILED_IMPORTS_FILE_REMOTE)  

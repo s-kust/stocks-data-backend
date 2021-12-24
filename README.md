@@ -62,12 +62,13 @@ This repository contains the following examples:
 1. The state machine of medium complexity. It uses `map`. Also, it catches and handles errors that may occur in Lambda functions. See its definition in the `/src/state_machine.json` file.
 2. Integration of the state machine into the AWS CloudFormation template.
 3. Passing environment variables to AWS Lambda functions through the AWS CloudFormation template.
-4. How to filter files in the S3 buclet by name, as well as by the date and time of their last update - see the `create-tickers-df-from-spreadsheet` function.
+4. How to filter files in the S3 buclet by name, as well as by the date and time of their last update. See the functions `create-tickers-df-from-spreadsheet` and `import-all-row-tickers`.
 5. In the `create-tickers-df-from-spreadsheet` function, working with a Google Spreadsheet document using the `gspread` library.
 6. The function `import-all-row-tickers` receives seveal kinds of data from Alpha Vantage through its API. It carefully validates the obtained data before transferring it for further processing.
-7. The function `create_charts` uses the `mplfinance` library to draw the candlestick and line charts. 
+7. The system pauses in order not to send requests to Alpha Vantage API too often and not to exceed the allowed limit. This logic is implemented in the state machine and not inside the Lambda functions.
+8. The function `create_charts` uses the `mplfinance` library to draw the candlestick and line charts. 
 
-When using the AWS Secrets Manager, a problem with the secret value may arise. It is solved by the following code:
+When using the AWS Secrets Manager, a problem with the obtained secret value may arise. It is solved by the following code:
 ```python
 get_secret_value_response = secrets_client.get_secret_value(SecretId=SECRET_NAME)
 secret = get_secret_value_response['SecretString']
