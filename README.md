@@ -3,22 +3,26 @@
 The system workflow:
 
 1. Load a list of portfolio rows from Google Spreadsheet. 
-2. For each row, import its tickers recent data using the data provider's API
+2. For each row, import its tickers recent data using the data provider's API.
 3. Plot the charts and save them on the hard drive or in the S3 bucket.
 3. Generate a report with charts and send it to the email. 
 
-You can run the workflow regularly at suitable intervals. For example, on business days in the morning and again 15 minutes before the end of the trading time. In addition to email, you can see the recent charts online. 
+You can run the workflow regularly at suitable intervals. For example, on business days in the morning and again 15 minutes before the end of the trading time. 
 
-![Portfolio watchlist spreadsheet example](/misc/1.PNG)
+In addition to email, you can see the recent charts online using the [frontend](https://github.com/s-kust/amplifyapp/). 
 
-The system currently supports three types of reports:
+The system currently supports the following types of reports:
 1. Single stock or ETF.
 2. Relative performance of two tickers.
 3. FX currencies pair. 
 
 Additional report types can be easily added as needed.
 
-The system consists of the AWS Lambda backend and a React frontend. This repository contains the code of the backend. It has several Python functions coordinated by the state machine. All of these resources are integrated into the AWS CloudFormation template for easy deployment.
+The system consists of the AWS Lambda backend and a React frontend. This repository contains the code of the backend. It has several Python functions coordinated by the state machine. 
+
+![State machine schema](/misc/sm-schema.PNG) 
+
+All of these resources are integrated into the AWS CloudFormation template for fast and easy deployment.
 
 The frontend is an AWS Amplify React application. Please see [its repository](https://github.com/s-kust/amplifyapp/) with the codebase and setup instructions.
 
@@ -38,15 +42,37 @@ Prepare the [Alpha Vantage](https://www.alphavantage.co/) API key and save it in
 
 Create two AWS S3 buckets for data and generated charts. Paste their names in the AWS CloudFormation template parameters `BucketMainData` and `BucketCharts`. Note that the objects in the charts bucket must be publicly accessible. 
 
-Now you have to manually load the state machine definition file `/src/state_machine.json` into the data S3 bucket. After that, check out the `DefinitionUri` parameter in the `template.yml` file. Unfortunately, I was unable to simplify this step. The system does not accept the state machine definition from the local file.
+Now you have to manually load the state machine definition file `/src/state_machine.json` into the data S3 bucket. After that, check out the `DefinitionUri` parameter in the `template.yml` file. Unfortunately, I was unable to simplify this step. Currently, the system does not accept the state machine definition from the local file.
 
 After all there preparations, run the bash script `1-create-bucket.sh`. Make sure that the `bucket-name.txt` file appeared in the root directory and that one more S3 bucket has been created. This step only needs to be done once.
 
 Check carefully all the input parameters in the `template.yml` file and then run the `3-deploy.sh` script. If the deployment was successful, go to the AWS Step Functions console and run the newly created state machine for testing. In addition to the real portfolio items, you can add several erroneous tickers to the spreadsheet to see how the system handles errors.
 
-After testing the state machine, go to the AWS API Gateway console and make sure that the newly created API works OK. The frontend will call it and use the data it receives from it.
+After testing the state machine, go to the AWS API Gateway console and make sure that the newly created API works OK. The frontend will call it and use its data.
+
+In the EventBridge console, create a schedule to automatically run the machine on a regular basis.
 
 Whenever you want to redeploy the system, you just need to run the `3-deploy.sh` script again. The system automatically detects all changes made to the files and deploys them.
 
 There is a `5-cleanup.sh` script provided in the root directory. It automates the removal of the system and all its associated AWS resources. Please note that it uninstalls the backend only. To get rid of the frontend, you need to carry out a separate removal of the AWS Amplify application.
 
+<h2>What is useful here for AWS Lambda developers</h2>
+
+This repository contains the following examples:
+1. The state machine of medium complexity. It uses `map`. Also, it catches and handles errors that may occur in Lambda functions. See its definition in the `/src/state_machine.json` file.
+2. Integration of the state machine into the AWS CloudFormation template.
+3. Passing environment variables to AWS Lambda functions through the AWS CloudFormation template.
+4. How to filter files in the S3 buclet by name, as well as by the date and time of their last update - see the `create-tickers-df-from-spreadsheet` function.
+5. In the `create-tickers-df-from-spreadsheet` function, working with a Google Spreadsheet document using the `gspread` library.
+6. The function `import-all-row-tickers` receives seveal kinds of data from Alpha Vantage through its API. It carefully validates the obtained data before transferring it for further processing.
+7. The function `create_charts` uses the `mplfinance` library to draw the candlestick and line charts. 
+
+When using the AWS Secrets Manager, a problem with the secret value may arise. It is solved by the following code:
+```python
+get_secret_value_response = secrets_client.get_secret_value(SecretId=SECRET_NAME)
+secret = get_secret_value_response['SecretString']
+secret = json.loads(secret)
+for key in secret:
+    secret[key] = secret[key].replace('\\n', '\n')
+```	
+See the details in the `import-all-row-tickers` function. 
