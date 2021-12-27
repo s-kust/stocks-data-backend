@@ -60,8 +60,6 @@ In the EventBridge console, create a schedule to automatically run the machine o
 
 Whenever you want to redeploy the system, you just need to run the `3-deploy.sh` script again. The system automatically detects all changes made to the files and deploys them.
 
-There is a `5-cleanup.sh` script provided in the root directory. It automates the removal of the system and all its associated AWS resources. Please note that it uninstalls the backend only. To get rid of the frontend, you need to carry out a separate removal of the AWS Amplify application.
-
 <h2>What is useful here for AWS Lambda developers</h2>
 
 This repository contains the following examples:
