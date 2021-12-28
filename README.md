@@ -43,11 +43,9 @@ To enable the script to work with that spreadsheet, follow [these instructions](
    1. Note that you must give the spreadsheet editing rights to your function, not just viewing, although in our case it does not perform any editing.
    1. Save the following key-value pairs in the previously created AWS Secrets Manager: `type`, `project_id`, `private_key_id`, `private_key`, `client_email`, `client_id`, `auth_uri`, `token_uri`, `auth_provider_x509_cert_url`, `client_x509_cert_url`. 
 
-Prepare the [Alpha Vantage](https://www.alphavantage.co/) API key and save it in the AWS Secrets Manager secret named `alpha_vantage_api_key` with the same key.
+Create two AWS S3 buckets for data and generated charts. Paste their names in the AWS CloudFormation template `template.yml` parameters `BucketMainData` and `BucketCharts`. Note that the objects in the charts bucket must be publicly accessible. 
 
-Create two AWS S3 buckets for data and generated charts. Paste their names in the AWS CloudFormation template parameters `BucketMainData` and `BucketCharts`. Note that the objects in the charts bucket must be publicly accessible. 
-
-Now you have to manually load the state machine definition file `/src/state_machine.json` into the data S3 bucket. After that, check out the `DefinitionUri` parameter in the `template.yml` file. Unfortunately, I was unable to simplify this step. Currently, the system does not accept the state machine definition from the local file.
+Now you have to manually load the state machine definition file `/src/state_machine.json` into the data S3 bucket. Unfortunately, I was unable to simplify this step. Currently, the system does not accept the state machine definition from the local file. After uploading the state machine definition file into the S3 bucket, check out the `DefinitionUri` parameter in the `template.yml` file. 
 
 After all these preparations, run the bash script `1-create-bucket.sh`. Make sure that the `bucket-name.txt` file appeared in the root directory and that one more S3 bucket has been created. This step only needs to be done once.
 
@@ -61,16 +59,16 @@ After testing the state machine, go to the AWS API Gateway console and make sure
 
 Make sure that the EventBridge console contains a schedule to automatically run the state machine on a regular basis. Edit that schedule according to your preferences.
 
-Whenever you want to redeploy the system, you just need to run the `3-deploy.sh` script again. The system automatically detects all changes made to the files and deploys them.
+Whenever you want to redeploy the system, you just need to run the `3-deploy.sh` script again. The system automatically detects all changes in the files and deploys them.
 
 <h2>What is useful here for AWS Lambda developers</h2>
 
-This repository contains the following examples:
+If you write AWS Lambda functions in Python, you may find some useful pieces of code here. This repository contains the following examples:
 1. The state machine of medium complexity. It uses `map`. Also, it catches and handles several kinds of errors that may occur in Lambda functions. See its definition in the `/src/state_machine.json` file.
-2. Integration of the state machine into the AWS CloudFormation template, including the EventBridge schedule for running it regularly.
+2. Integration of the state machine into the AWS CloudFormation template, including input parameters and the EventBridge schedule for running it regularly.
 3. Passing environment variables to AWS Lambda functions through the AWS CloudFormation template.
-4. How to filter files in the S3 bucket by name, as well as by the date and time of their last update. See the functions `create-tickers-df-from-spreadsheet` and `import-all-row-tickers`.
-5. In the `create-tickers-df-from-spreadsheet` function, working with a Google Spreadsheet document using the `gspread` library.
+4. How to filter files in the S3 bucket in Python. The files are filtered by name, as well as by the date and time of their last update. See the functions `create-tickers-df-from-spreadsheet` and `import-all-row-tickers`.
+5. In the `create-tickers-df-from-spreadsheet` function, working with a Google Spreadsheet document in Python using the `gspread` library.
 6. The function `import-all-row-tickers` receives seveal kinds of data from Alpha Vantage through its API. It carefully validates the obtained data before transferring it for further processing.
 7. The system pauses in order not to send requests to Alpha Vantage API too often and not to exceed the allowed limit. This logic is implemented in the state machine and not inside the Lambda functions.
 8. The function `create_charts` uses the `mplfinance` library to draw the candlestick and line charts. 
