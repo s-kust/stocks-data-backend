@@ -248,7 +248,7 @@ Resources:
         Variables:
           s3_main_bucket: !Ref BucketMainData
           region_id: !Ref RegionId
-          secret_api: !Ref SecretApi
+          secret_id: !Ref SecretId
       Layers:
         - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-pandas:43
       Runtime: python3.8

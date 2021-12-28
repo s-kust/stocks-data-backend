@@ -30,15 +30,18 @@ The frontend is an AWS Amplify React application. Please see [its repository](ht
 
 <h2>Deployment manual</h2>
 
-First, prepare the Google spreadsheet with the list of stocks and currency pairs tickers to be traced.
+First, let's prepare and store the [Alpha Vantage](https://www.alphavantage.co/) API key. Register on their website to receive your personal key. It's free of charge. Create the AWS Secrets Manager secret, maybe named `portfolio_spreadsheet`. Save your Alpha Vantage API code there with the key `alpha_vantage_api_key`.
+
+Note. If you use another AWS Secrets Manager secret name, not `portfolio_spreadsheet`, then edit the AWS CloudFormation template `template.yml` input parameter `SecretId`.
+
+Next, prepare the Google spreadsheet with the list of stocks and currency pairs tickers to be traced.
 
 ![Watchlist spreadsheet example](/misc/1.PNG) 
 
 To enable the script to work with that spreadsheet, follow [these instructions](https://www.twilio.com/blog/2017/02/an-easy-way-to-read-and-write-to-a-google-spreadsheet-in-python.html). If the page is not available, use the [archived PDF version](/misc/Google_Spreadsheets_Python.pdf).
    1. You'll have to go to the Google APIs Console, create a new project, enable API, etc. 
    1. Note that you must give the spreadsheet editing rights to your function, not just viewing, although in our case it does not perform any editing.
-   1. Prepare the values and save the following key-value pairs in the AWS Secrets Manager: `type`, `project_id`, `private_key_id`, `private_key`, `client_email`, `client_id`, `auth_uri`, `token_uri`, `auth_provider_x509_cert_url`, `client_x509_cert_url`. 
-   1. The name of the secret may be `portfolio_spreadsheet`, otherwise change it in the AWS CloudFormation template parameter `SecretId`.
+   1. Save the following key-value pairs in the previously created AWS Secrets Manager: `type`, `project_id`, `private_key_id`, `private_key`, `client_email`, `client_id`, `auth_uri`, `token_uri`, `auth_provider_x509_cert_url`, `client_x509_cert_url`. 
 
 Prepare the [Alpha Vantage](https://www.alphavantage.co/) API key and save it in the AWS Secrets Manager secret named `alpha_vantage_api_key` with the same key.
 
@@ -46,7 +49,7 @@ Create two AWS S3 buckets for data and generated charts. Paste their names in th
 
 Now you have to manually load the state machine definition file `/src/state_machine.json` into the data S3 bucket. After that, check out the `DefinitionUri` parameter in the `template.yml` file. Unfortunately, I was unable to simplify this step. Currently, the system does not accept the state machine definition from the local file.
 
-After all there preparations, run the bash script `1-create-bucket.sh`. Make sure that the `bucket-name.txt` file appeared in the root directory and that one more S3 bucket has been created. This step only needs to be done once.
+After all these preparations, run the bash script `1-create-bucket.sh`. Make sure that the `bucket-name.txt` file appeared in the root directory and that one more S3 bucket has been created. This step only needs to be done once.
 
 Check carefully all the input parameters in the `template.yml` file and then run the `3-deploy.sh` script. If the deployment was successful, go to the AWS Step Functions console and run the newly created state machine for testing. 
 
@@ -56,15 +59,15 @@ In addition to the real portfolio items, you can add several erroneous tickers t
 
 After testing the state machine, go to the AWS API Gateway console and make sure that the newly created API works OK. The frontend will call it and use its data.
 
-In the EventBridge console, create a schedule to automatically run the machine on a regular basis.
+Make sure that the EventBridge console contains a schedule to automatically run the state machine on a regular basis. Edit that schedule according to your preferences.
 
 Whenever you want to redeploy the system, you just need to run the `3-deploy.sh` script again. The system automatically detects all changes made to the files and deploys them.
 
 <h2>What is useful here for AWS Lambda developers</h2>
 
 This repository contains the following examples:
-1. The state machine of medium complexity. It uses `map`. Also, it catches and handles errors that may occur in Lambda functions. See its definition in the `/src/state_machine.json` file.
-2. Integration of the state machine into the AWS CloudFormation template.
+1. The state machine of medium complexity. It uses `map`. Also, it catches and handles several kinds of errors that may occur in Lambda functions. See its definition in the `/src/state_machine.json` file.
+2. Integration of the state machine into the AWS CloudFormation template, including the EventBridge schedule for running it regularly.
 3. Passing environment variables to AWS Lambda functions through the AWS CloudFormation template.
 4. How to filter files in the S3 bucket by name, as well as by the date and time of their last update. See the functions `create-tickers-df-from-spreadsheet` and `import-all-row-tickers`.
 5. In the `create-tickers-df-from-spreadsheet` function, working with a Google Spreadsheet document using the `gspread` library.
@@ -80,4 +83,4 @@ secret = json.loads(secret)
 for key in secret:
     secret[key] = secret[key].replace('\\n', '\n')
 ```	
-See the details in the `import-all-row-tickers` function. 
+See the example in the `import-all-row-tickers` function. 
